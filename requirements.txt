@@ -1,12 +1,23 @@
-openai>=1.40.0
+# Provedor LLM (Groq)
+groq>=0.15.0
+python-dotenv>=1.0.0
+httpx>=0.27.0
+
+# Manipulação de Dados e Extração
 pandas>=2.2.0
 numpy>=1.26.0
 PyMuPDF>=1.24.0
-sentence-transformers>=3.0.0
-python-dotenv>=1.0.0
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
-pydantic>=2.8.0
-pytest>=8.0.0
-httpx>=0.27.0
+
+# Retrieval & Embeddings Locais (ONNX Runtime, sem PyTorch/CUDA)
+fastembed>=0.4.0
+
+# Validação de Dados
+pydantic>=2.8.0,<3.0.0
+
+# Interface e CLI
 rich>=13.7.0
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0
+
+# Testes
+pytest>=8.0.0
