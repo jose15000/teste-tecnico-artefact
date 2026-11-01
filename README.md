@@ -1,123 +1,123 @@
-# Teste Técnico Artefact — Atendente Virtual da Empório da Música
+# Artefact Technical Challenge — Empório da Música Virtual Agent
 
-Agente de atendimento conversacional (estilo WhatsApp) para a **Empório da Música**, loja de instrumentos musicais em Campo Grande/MS. O assistente utiliza LLM via **Groq** com *function/tool calling* nativo sobre bases relacionais da loja (CSVs) e um pipeline RAG híbrido sobre o manual de políticas internas (PDF).
+A conversational customer service agent (WhatsApp style) for **Empório da Música**, a musical instrument retail store based in Campo Grande/MS, Brazil. The assistant leverages an LLM via **Groq** with native *function/tool calling* over relational store datasets (CSVs) and a hybrid RAG pipeline over the internal customer service policy manual (PDF).
 
 ---
 
-## Como Executar
+## How to Run
 
-### 1. Pré-requisitos e Ambiente
+### 1. Prerequisites and Setup
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # configure sua chave GROQ_API_KEY
+cp .env.example .env   # add your GROQ_API_KEY
 ```
 
-### 2. Iniciar Atendimento (CLI)
+### 2. Start Customer Service Chat (CLI)
 ```bash
 python main.py
 ```
-- Comandos úteis no terminal: `sair` encerra o atendimento, `limpar` reinicia a conversa.
+- Available commands in chat: `sair` (or `exit`/`quit`) terminates the session, `limpar` resets conversation history.
 
-### 3. Rodar Testes Automatizados
+### 3. Run Automated Tests
 ```bash
 pytest
 ```
 
 ---
 
-## Configuração (`.env`)
+## Configuration (`.env`)
 
-A única variável obrigatória é a chave da API da Groq:
+The only required environment variable is the Groq API key:
 
-| Variável | Descrição | Obrigatória |
+| Variable | Description | Required |
 |---|---|:---:|
-| `GROQ_API_KEY` | Chave da API da Groq | Sim |
+| `GROQ_API_KEY` | Groq API Key | Yes |
 
-> **Nota:** O modelo da Groq (`openai/gpt-oss-120b`) e o modelo de embeddings (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`) já possuem valores padrão configurados diretamente no código, não sendo necessário defini-los no `.env`. Caso deseje sobrescrevê-los para testes, você pode opcionalmente definir `GROQ_MODEL` e `EMBEDDING_MODEL`.
+> **Note:** Both the LLM (`openai/gpt-oss-120b`) and the local embedding model (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`) have built-in default values defined directly in the code, so defining them in `.env` is entirely optional. If you wish to override them for testing, you may set `GROQ_MODEL` and `EMBEDDING_MODEL`.
 
 ---
 
-## Arquitetura do Projeto
+## Project Architecture
 
 ```
-main.py                CLI interativa de atendimento
+main.py                Interactive CLI entry point
 src/
-├── agent.py           Loop ReAct de tool calling com tolerância a falhas
-├── prompts.py         System prompt com persona e diretrizes de negócio
-├── tools.py           Ferramentas: search_products, get_order_status, search_policies
-├── tools_schema.py    Schemas JSON de ferramentas em conformidade com o LLM
-├── data_loader.py     Carga, normalização e indexação em memória dos CSVs
-└── rag.py             Engine de busca híbrida (vetorial + léxica) no PDF de políticas
-data/                  Bases CSVs da loja e políticas_da_loja.pdf
-conversations/         Transcrições completas de 4 cenários de teste reais
-tests/                 Suíte de testes automatizados com pytest
+├── agent.py           ReAct tool calling loop with retry mechanisms
+├── prompts.py         System prompt, persona, and core business guidelines
+├── tools.py           Tools: search_products, get_order_status, search_policies
+├── tools_schema.py    JSON function schemas matching LLM specifications
+├── data_loader.py     Data loading, normalization, and in-memory indexing of CSVs
+└── rag.py             Hybrid search engine (dense vector + lexical) over policies PDF
+data/                  CSV databases and políticas_da_loja.pdf
+conversations/         Transcripts of 4 real test scenarios executed against the model
+tests/                 Automated test suite with pytest
 ```
 
 ---
 
-## Justificativa das Decisões Técnicas
+## Justification of Technical Decisions
 
-### 1. Framework / Abordagem do Agente
-- **Tool Calling Nativo em Loop ReAct Direto (sem LangChain / CrewAI):** Optou-se por construir o agente em Python puro utilizando o SDK oficial da Groq.
-- **Racional:** Frameworks orquestradores pesados introduzem camadas excessivas de abstração, sobrecarga de dependências, menor determinismo e dificultam a depuração fina de mensagens malformadas. O loop em `src/agent.py` oferece controle absoluto sobre o histórico, tratamento granular de exceções (como `output_parse_failed` e `tool_use_failed`) e retorno de erros diretamente como contexto (`role: tool`) para auto-recuperação do modelo.
+### 1. Agent Framework and Approach
+- **Native Tool Calling with Direct ReAct Loop (No LangChain / CrewAI):** The agent is built in pure Python using the official Groq SDK.
+- **Rationale:** Heavy orchestration frameworks introduce unnecessary layers of abstraction, dependency bloat, reduced determinism, and make fine-grained debugging of malformed tool calls difficult. The lightweight loop in `src/agent.py` provides total control over message history, granular exception handling (such as `output_parse_failed` and `tool_use_failed`), and returns tool execution errors directly as context (`role: tool`) so the model can self-correct.
 
-### 2. Provedor e Modelo (LLM)
-- **Groq com `openai/gpt-oss-120b`:**
-- **Racional:** Em um canal de atendimento conversacional (estilo WhatsApp), a latência da primeira resposta é crucial para uma boa experiência do cliente. Os chips LPU da Groq entregam centenas de tokens por segundo com tempo de resposta quase instantâneo, aliado a um suporte robusto a *function calling* e excelente capacidade de interpretação em português.
+### 2. LLM Provider and Model
+- **Groq with `openai/gpt-oss-120b`:**
+- **Rationale:** In a conversational messaging channel (WhatsApp style), time-to-first-token is critical for user experience. Groq's LPU architecture delivers hundreds of tokens per second with near-instantaneous responses, combined with robust native function calling and strong comprehension of Portuguese.
 
-### 3. Arquitetura de Retrieval (RAG)
-- **Extração Estruturada e Chunking Hierárquico:** O texto do PDF é extraído via `PyMuPDF` limpando cabeçalhos e rodapés repetitivos, sendo segmentado hierarquicamente pelas seções numeradas (1 a 10 e subitens como 5.1, 5.2). Cada trecho herda o título da seção pai (ex.: `5. Política de Frete e Entregas — 5.1 Entregas na Região Metropolitana de Campo Grande`), garantindo contexto semântico completo aos chunks.
-- **Busca Híbrida (Densa + Léxica):**
-  - *Densa:* Embeddings multilingues gerados localmente via `fastembed` em runtime ONNX sem necessidade de PyTorch ou GPU.
-  - *Léxica:* Bônus ponderado em títulos e conteúdo para palavras-chave exatas, garantindo precisão cirúrgica em valores críticos (ex.: `"PIX"`, `"5%"`, `"Campo Grande"`, `"R$ 35"`, `"500"`).
-- **100% em Memória RAM (Singleton Lazy-Loading):** Todo o índice vetorial e léxico é computado uma única vez na inicialização e mantido em memória via `numpy.dot`, sem dependência de bancos de vetores externos (Pinecone, Chroma, Qdrant).
-- **Degradação Segura (Fallback):** Caso o modelo ONNX não esteja disponível no ambiente, o mecanismo degrada automaticamente para a busca léxica sem interromper a execução do assistente.
+### 3. Retrieval Architecture (RAG)
+- **Structured Extraction and Hierarchical Chunking:** PDF text is extracted using `PyMuPDF`, filtering out repetitive headers and footers, and hierarchically segmented by numbered sections (1 to 10 and subitems like 5.1, 5.2). Each chunk retains its parent section title (e.g., `5. Política de Frete e Entregas — 5.1 Entregas na Região Metropolitana de Campo Grande`), preserving complete semantic context.
+- **Hybrid Search (Dense + Lexical):**
+  - *Dense:* Multilingual embeddings generated locally via `fastembed` in ONNX Runtime without requiring PyTorch or GPU acceleration.
+  - *Lexical:* Weighted bonuses applied to titles and contents for exact keyword matches, guaranteeing precision for critical terms (e.g., `"PIX"`, `"5%"`, `"Campo Grande"`, `"R$ 35"`, `"500"`).
+- **100% In-Memory RAM (Singleton Lazy-Loading):** The entire vector and lexical index is computed once upon initialization and evaluated in memory via `numpy.dot`, eliminating dependencies on external vector databases (Pinecone, Chroma, Qdrant).
+- **Graceful Fallback:** If the ONNX model is unavailable in the environment, the retrieval engine degrades smoothly to lexical search without interrupting customer service.
 
-### 4. Estratégia de Prompt e Persona
-- **Persona:** Atendente atencioso, conhecedor de música, ágil e focado na realidade local da loja em Campo Grande/MS.
-- **Diretrizes Estritas:**
-  1. *Exclusividade de Instrumentos:* A loja não vende acessórios avulsos (cordas avulsas, palhetas, cabos, pedais, amplificadores); o atendente recusa com simpatia e redireciona para instrumentos.
-  2. *Anti-Alucinação:* Proibição de inventar estoques, preços ou status de pedidos sem invocar as ferramentas correspondentes.
-  3. *Consulta Obrigatória a Políticas:* Regras de frete, prazos, trocas, devoluções, garantia, horários e formas de pagamento devem sempre ser checadas via `search_policies`.
-  4. *Gestão de Ruptura:* Se um produto procurado estiver esgotado, avisar com clareza e recomendar modelos similares ativos em estoque.
-  5. *Foco no Escopo:* Perguntas totalmente alheias à loja ou a instrumentos são tratadas com cordialidade, esclarecendo o propósito da Empório da Música.
+### 4. Prompt Engineering and Persona Strategy
+- **Persona:** Cordial, professional, knowledgeable about music, agile, and aligned with local retail in Campo Grande/MS.
+- **Strict Guidelines:**
+  1. *Instruments Exclusivity:* The store does not sell accessories (spare strings, picks, cables, pedals, amplifiers); the agent politely declines and guides the user toward instruments.
+  2. *Anti-Hallucination:* Prohibits fabricating inventory, prices, or order statuses without invoking the respective tools.
+  3. *Mandatory Policy Lookups:* Freight costs, delivery timeframes, exchanges, returns, warranties, store hours, and payment terms must always be checked via `search_policies`.
+  4. *Stockout Handling:* When a requested item is out of stock, the agent is transparent and suggests active similar alternatives in stock.
+  5. *Scope Control:* Out-of-scope inquiries (e.g., electronics repair, general knowledge) are politely declined while redirecting the user back to the store's instruments.
 
-### 5. Tratamento de Dados e Privacidade
-- **Validação de Identidade em Pedidos:** A ferramenta `get_order_status` exige tanto o número do pedido quanto o telefone do cliente. Se o telefone não coincidir com o cadastro, a API retorna mensagem genérica de não encontrado, impedindo enumeração e vazamento de pedidos por terceiros.
-- **Normalização e Flexibilidade Gramatical:** Funções de normalização Unicode (`normalize_text`) removem diacríticos e tratam singular/plural de categorias (ex.: a busca por `"violão"` casa com a categoria `"Violões"`).
+### 5. Data Processing and Privacy Safeguards
+- **Identity Verification for Orders:** The `get_order_status` tool requires both the order ID and the customer's registered phone number. If the phone does not match, a generic not-found message is returned to prevent order enumeration and unauthorized data exposure.
+- **Normalization and Grammatical Flexibility:** Unicode normalization (`normalize_text`) strips accents and handles singular/plural category inflections in Portuguese (e.g., searching for `"violão"` correctly matches the `"Violões"` category).
 
 ---
 
-## Exemplos de Interação Registrados
+## Recorded Interaction Examples
 
-O repositório conta com 4 transcrições reais de conversas executadas contra o modelo Groq na pasta [`conversations/`](conversations/):
+The repository includes 4 real conversation transcripts executed against the Groq model in the [`conversations/`](conversations/) directory:
 
-| Arquivo | Cenário Coberto | Destaques |
+| File | Scenario Covered | Key Highlights |
 |---|---|---|
-| [`01_catalogo_e_precos.md`](conversations/01_catalogo_e_precos.md) | Consulta de Catálogo e Preços | Filtro de violões até R$ 1.000, ordenação por preço e consulta detalhada do Takamine GD20. |
-| [`02_politicas_e_devolucoes.md`](conversations/02_politicas_e_devolucoes.md) | Informações Gerais e Políticas | Consulta de endereço/horários no centro de Campo Grande e direito de arrependimento (7 dias, frete reverso grátis). |
-| [`03_status_de_pedido_e_rastreio.md`](conversations/03_status_de_pedido_e_rastreio.md) | Status de Pedido e Rastreamento | Exigência segura de telefone antes da consulta e emissão do código de rastreio `BRJL5544332BR`. |
-| [`04_casos_de_borda_e_fora_de_escopo.md`](conversations/04_casos_de_borda_e_fora_de_escopo.md) | Casos de Borda e Fora de Escopo | Produto sem estoque com sugestão de Sunburst alternativo, recusa educada de palhetas e recusa cordial de conserto de micro-ondas. |
+| [`01_catalogo_e_precos.md`](conversations/01_catalogo_e_precos.md) | Catalog & Price Inquiry | Filter acoustic guitars under R$ 1,000, price sorting, and detailed specs inquiry for the Takamine GD20. |
+| [`02_politicas_e_devolucoes.md`](conversations/02_politicas_e_devolucoes.md) | Store Info & Policies | Store address and working hours in downtown Campo Grande, and right of withdrawal policy (7 days, free reverse logistics). |
+| [`03_status_de_pedido_e_rastreio.md`](conversations/03_status_de_pedido_e_rastreio.md) | Order Status & Tracking | Secure phone verification before revealing order details, and returning tracking code `BRJL5544332BR`. |
+| [`04_casos_de_borda_e_fora_de_escopo.md`](conversations/04_casos_de_borda_e_fora_de_escopo.md) | Edge Cases & Out-of-Scope | Out-of-stock item with Sunburst alternative suggestions, polite refusal of picks, and courteous decline of microwave repairs. |
 
 ---
 
-## Limitações Conhecidas e Próximos Passos (Mais Tempo)
+## Known Limitations and Next Steps (Given More Time)
 
-1. **Persistência de Sessões em Banco de Dados:** Atualmente o histórico reside na memória da sessão CLI. Com mais tempo, integraria persistência durável via PostgreSQL ou Redis com TTL para suportar milhares de sessões concorrentes de clientes.
-2. **Integração com Mensageria Real:** Conexão direta com a WhatsApp Cloud API (ou provedores como Twilio/Z-API) via webhooks assíncronos.
-3. **Re-ranking Neural para RAG:** Adição de um modelo cross-encoder (ex.: `bge-reranker-base`) após o estágio de recuperação híbrida, aumentando ainda mais a precisão em perguntas com múltiplas cláusulas de políticas.
-4. **Cache em Disco de Embeddings do PDF:** Serializar os vetores calculados do PDF em arquivo binário (`.npy` ou `.parquet`), reduzindo o tempo de inicialização a zero em qualquer ambiente.
-5. **Checkout Interativo com PIX Copia-e-Cola:** Criação de tool para gerar payload de PIX dinâmico com reserva de estoque temporária (15 minutos).
+1. **Persistent Session Storage:** Conversation history is currently stored in memory during the interactive CLI session. Given more time, durable persistence via PostgreSQL or Redis with TTL would be added to support concurrent sessions across users.
+2. **Real Messaging Channel Integration:** Direct integration with the WhatsApp Cloud API (or Twilio/Z-API) through asynchronous webhooks.
+3. **Neural Re-Ranking for RAG:** Implementing a cross-encoder model (e.g., `bge-reranker-base`) following the hybrid retrieval phase to further refine ranking on complex multi-clause inquiries.
+4. **Disk Cache for PDF Embeddings:** Serializing the computed vector matrices to disk (`.npy` or `.parquet`) to eliminate initialization time across cold starts.
+5. **Interactive Checkout with Instant PIX:** A tool to generate dynamic PIX copy-and-paste payment codes with a temporary 15-minute stock hold.
 
 ---
 
-## Uso de Assistentes de Código
+## Use of AI Coding Assistants
 
-No desenvolvimento deste projeto, utilizei o **Antigravity (agente inteligente de engenharia de software)** como acelerador de desenvolvimento. 
+During the development of this project, I used **Antigravity (an advanced AI software engineering agent)** as a development accelerator.
 
-### Como foi utilizado no workflow:
-- **Scaffolding e Estrutura Inicial:** Agilização na criação de boilerplate, schemas JSON de ferramentas e arquivos de configuração.
-- **Elaboração de Expressões Regulares e Chunking:** Apoio na estruturação do parser hierárquico do PDF no `src/rag.py` para detecção de seções e subseções.
-- **Diagnóstico de Schemas e Robustez:** Identificação rápida de restrições do validador de schemas da Groq (como parâmetros opcionais gerando erro 400 ao receber `null`, corrigidos com `anyOf: [..., null]`).
-- **Automação de Testes e Cenários:** Auxílio na escrita da suíte de 14 testes unitários automatizados com `pytest` e na gravação automatizada dos diálogos na pasta `conversations/`.
+### How it was used in the workflow:
+- **Scaffolding and Setup:** Accelerating boilerplate generation, JSON tool schemas, and environment configuration.
+- **Regex & Chunking Refinement:** Structuring the hierarchical PDF parser in `src/rag.py` to identify main sections and subsections accurately.
+- **Schema Validation & Robustness:** Diagnosing strict Groq schema validation constraints (e.g., handling optional parameters by allowing `anyOf: [..., null]` to prevent 400 errors).
+- **Test Automation & Scenario Recording:** Assisting in writing the 14-test suite with `pytest` and automating the recording of realistic conversation dialogues in `conversations/`.
