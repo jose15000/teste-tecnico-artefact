@@ -28,11 +28,13 @@ pytest
 
 ## Configuração (`.env`)
 
-| Variável | Descrição | Padrão |
-|---|---|---|
-| `GROQ_API_KEY` | Chave da API da Groq (obrigatória) | — |
-| `GROQ_MODEL` | Modelo de LLM com suporte a tool calling | `openai/gpt-oss-120b` |
-| `EMBEDDING_MODEL` | Modelo de embeddings multilingue local | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
+A única variável obrigatória é a chave da API da Groq:
+
+| Variável | Descrição | Obrigatória |
+|---|---|:---:|
+| `GROQ_API_KEY` | Chave da API da Groq | Sim |
+
+> **Nota:** O modelo da Groq (`openai/gpt-oss-120b`) e o modelo de embeddings (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`) já possuem valores padrão configurados diretamente no código, não sendo necessário defini-los no `.env`. Caso deseje sobrescrevê-los para testes, você pode opcionalmente definir `GROQ_MODEL` e `EMBEDDING_MODEL`.
 
 ---
 
