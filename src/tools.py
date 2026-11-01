@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.data_loader import load_store_data, normalize_phone, normalize_text
+from src.rag import search_policies
 
 MAX_RESULTS = 5
 
@@ -30,6 +31,18 @@ def _format_product(store, row) -> dict:
     return item
 
 
+def _matches_category(cat_filter: str, cat_name: str) -> bool:
+    f = normalize_text(cat_filter).rstrip("s")
+    n = normalize_text(cat_name).rstrip("s")
+    if f.endswith("ao"):
+        f_alt = f[:-2] + "oe"
+    elif f.endswith("oe"):
+        f_alt = f[:-2] + "ao"
+    else:
+        f_alt = f
+    return f in n or f_alt in n or n in f
+
+
 def search_products(
     query: str,
     category: str | None = None,
@@ -44,7 +57,7 @@ def search_products(
     for term in terms:
         df = df[df["search_blob"].str.contains(term, regex=False)]
     if category:
-        df = df[df["category_name"].apply(normalize_text).str.contains(normalize_text(category), regex=False)]
+        df = df[df["category_name"].apply(lambda c: _matches_category(category, c))]
     if max_price is not None:
         df = df[df["price_brl"] <= max_price]
     if only_in_stock:
@@ -94,4 +107,5 @@ def get_order_status(order_id: int, customer_phone: str) -> dict:
 AVAILABLE_TOOLS = {
     "search_products": search_products,
     "get_order_status": get_order_status,
+    "search_policies": search_policies,
 }

@@ -15,10 +15,13 @@ TOOLS_SCHEMA = [
                         "description": "Palavras-chave do produto, ex: 'violão nylon' ou 'Yamaha'.",
                     },
                     "category": {
-                        "type": "string",
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
                         "description": "Categoria opcional, ex: 'Guitarras', 'Baixos', 'Ukuleles'.",
                     },
-                    "max_price": {"type": "number", "description": "Preço máximo em reais."},
+                    "max_price": {
+                        "anyOf": [{"type": "number"}, {"type": "null"}],
+                        "description": "Preço máximo em reais.",
+                    },
                     "only_in_stock": {
                         "type": "boolean",
                         "description": "Se true, retorna apenas produtos ativos com estoque.",
@@ -46,6 +49,28 @@ TOOLS_SCHEMA = [
                     },
                 },
                 "required": ["order_id", "customer_phone"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_policies",
+            "description": (
+                "Consulta as políticas e procedimentos da loja (Manual da Empório da Música). "
+                "Use para tirar dúvidas sobre frete, prazos de entrega, trocas, devoluções, "
+                "garantia, formas de pagamento, parcelamento, desconto PIX, horário de funcionamento, "
+                "dados da loja ou atendimento via WhatsApp."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Dúvida ou termos a pesquisar sobre as políticas da loja, ex: 'prazo de entrega em Campo Grande' ou 'política de troca por defeito'.",
+                    },
+                },
+                "required": ["query"],
             },
         },
     },

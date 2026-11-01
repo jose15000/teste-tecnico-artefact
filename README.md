@@ -29,10 +29,10 @@ Testes: `pytest`
 main.py                CLI interativa
 src/agent.py           Loop de tool calling com a Groq
 src/prompts.py         System prompt e regras de negócio
-src/tools.py           Ferramentas: search_products, get_order_status
+src/tools.py           Ferramentas: search_products, get_order_status, search_policies
 src/tools_schema.py    Schemas JSON das ferramentas para o LLM
 src/data_loader.py     Carga e normalização dos CSVs
-src/rag.py             Base para busca nas políticas da loja (PDF)
+src/rag.py             Busca híbrida nas políticas da loja (PDF)
 data/                  CSVs e PDF de políticas
 tests/                 Testes das ferramentas
 ```
@@ -48,6 +48,15 @@ tests/                 Testes das ferramentas
 ### Ferramentas ([src/tools.py](src/tools.py))
 - **`search_products`**: busca por texto (todos os termos, sem acento/caixa), com filtros de categoria, preço máximo e apenas em estoque. Ordena por preço, retorna até 5 resultados e inclui promoção ativa (`discount_percent`, `price_with_discount_brl`).
 - **`get_order_status`**: consulta pedido exigindo o telefone do cliente. Telefone divergente e pedido inexistente retornam a mesma mensagem, para não vazar a existência de pedidos.
+- **`search_policies`**: busca híbrida no manual de políticas da loja (PDF) para dúvidas sobre fretes, prazos de entrega, trocas e devoluções, formas de pagamento, regras de parcelamento, garantia e horários.
+
+### RAG e Políticas ([src/rag.py](src/rag.py))
+- **Extração & Chunking estruturado**: extrai o texto do PDF via `PyMuPDF`, limpando cabeçalhos repetitivos e numerações de página. Segmenta hierarquicamente por seções e subseções numeradas (1 a 10 e subitens como 5.1, 5.2), preservando o título da seção pai em cada trecho (ex.: `5. Política de Frete e Entregas — 5.1 Entregas na Região Metropolitana de Campo Grande`).
+- **Indexação 100% em Memória RAM**: gera os chunks e a matriz de embeddings uma única vez via padrão singleton com lazy-loading (`get_policy_retriever()`), evitando recálculos e dependência de bancos vetoriais pesados.
+- **Busca Híbrida (Densa + Léxica)**:
+  - *Densa*: embeddings multilingues locais via `fastembed` (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` em ONNX Runtime) normalizados em L2, calculando similaridade de cosseno via produto escalar (`np.dot`) em microssegundos.
+  - *Léxica*: correspondência de termos exatos com pesos diferenciados (bônus no título e no conteúdo), garantindo precisão em termos críticos como "PIX", "Campo Grande", "35", "500", "5%".
+- **Resiliência e Fallback**: caso o modelo de embeddings ou runtime ONNX não esteja acessível no ambiente, o sistema degrada suavemente para a busca léxica sem interromper o atendimento do assistente.
 
 ### Regras de negócio ([src/prompts.py](src/prompts.py))
 - Vende exclusivamente instrumentos (sem acessórios, amplificadores, pedais etc.).

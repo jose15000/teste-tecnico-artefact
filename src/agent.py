@@ -65,12 +65,15 @@ class Agent:
         return FALLBACK_REPLY
 
     def _create_with_retry(self, kwargs: dict, retries: int = 3):
-        """Chama a API; se o modelo gerar um tool call malformado (output_parse_failed), tenta de novo."""
+        """Chama a API; se o modelo gerar um tool call malformado (output_parse_failed ou tool_use_failed), tenta de novo."""
         for _ in range(retries):
             try:
                 return self.client.chat.completions.create(**kwargs)
             except BadRequestError as e:
-                if getattr(e, "code", None) != "output_parse_failed":
+                err_code = getattr(e, "code", None)
+                if not err_code and isinstance(getattr(e, "body", None), dict):
+                    err_code = e.body.get("error", {}).get("code")
+                if err_code not in {"output_parse_failed", "tool_use_failed"}:
                     raise
         return None
 
